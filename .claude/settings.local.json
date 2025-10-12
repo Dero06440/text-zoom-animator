@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn clean:*)",
+      "Bash(if not exist \".vscode\" mkdir .vscode)",
+      "Bash(del .vscodelaunch.json)",
+      "Bash(del .vscodetasks.json)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
