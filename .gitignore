@@ -42,3 +42,5 @@ out/
 *.swp
 *~.nib
 local.properties
+.claude/settings.local.json
+CLAUDE.md
