@@ -21,18 +21,24 @@ public class MainView {
     private TextField textField;
     private TextField colorField;
     private Spinner<Integer> framesSpinner;
+    private Spinner<Integer> cyclesSpinner;
     private Spinner<Double> startScaleSpinner;
     private Spinner<Double> middleScaleSpinner;
     private Spinner<Double> endScaleSpinner;
     private TextField fileNameField;
     private TextField outputPathField;
     private Button browseButton;
-    private Button goButton;
+    private Button goTextButton;
+    private Button goImageButton;
     private ProgressBar progressBar;
     private Label statusLabel;
     private Label previewLabel;
     private ListView<String> recentFontsList;
     private ListView<String> recentColorsList;
+    private Button selectImageButton;
+    private TextField imagePathField;
+    private TextField imageExportPathField;
+    private Button browseImageExportButton;
 
     public MainView(Stage stage) {
         this.stage = stage;
@@ -89,6 +95,19 @@ public class MainView {
 
         colorBox.getChildren().addAll(colorLabel, hashLabel, colorField, recentColorsList);
 
+        // Image selection section
+        HBox imageBox = new HBox(10);
+        imageBox.setAlignment(Pos.CENTER_LEFT);
+        Label imageLabel = new Label("Image source:");
+        imageLabel.setMinWidth(120);
+        selectImageButton = new Button("Choisir une image...");
+        selectImageButton.setPrefWidth(200);
+        imagePathField = new TextField();
+        imagePathField.setPrefWidth(300);
+        imagePathField.setEditable(false);
+        imagePathField.setPromptText("Aucune image sélectionnée");
+        imageBox.getChildren().addAll(imageLabel, selectImageButton, imagePathField);
+
         // Preview label
         previewLabel = new Label("Texte");
         previewLabel.setStyle("-fx-font-size: 48px; -fx-font-weight: bold; -fx-text-fill: #ff00eb; -fx-padding: 20px; -fx-background-color: #f0f0f0; -fx-background-radius: 5px;");
@@ -138,15 +157,34 @@ public class MainView {
         paramsGrid.add(endLabel, 0, 3);
         paramsGrid.add(endScaleSpinner, 1, 3);
 
-        // Output path
+        // Cycles
+        Label cyclesLabel = new Label("Cycles:");
+        cyclesLabel.setMinWidth(120);
+        cyclesSpinner = new Spinner<>(1, 20, 1);
+        cyclesSpinner.setEditable(true);
+        cyclesSpinner.setPrefWidth(100);
+        paramsGrid.add(cyclesLabel, 0, 4);
+        paramsGrid.add(cyclesSpinner, 1, 4);
+
+        // Text output path
         HBox pathBox = new HBox(10);
         pathBox.setAlignment(Pos.CENTER_LEFT);
-        Label pathLabel = new Label("Dossier export:");
+        Label pathLabel = new Label("Dossier export texte:");
         pathLabel.setMinWidth(120);
         outputPathField = new TextField("C:\\temp");
         outputPathField.setPrefWidth(250);
         browseButton = new Button("Parcourir...");
         pathBox.getChildren().addAll(pathLabel, outputPathField, browseButton);
+
+        // Image export path
+        HBox imageExportBox = new HBox(10);
+        imageExportBox.setAlignment(Pos.CENTER_LEFT);
+        Label imageExportLabel = new Label("Dossier export image:");
+        imageExportLabel.setMinWidth(120);
+        imageExportPathField = new TextField("C:\\temp");
+        imageExportPathField.setPrefWidth(250);
+        browseImageExportButton = new Button("Parcourir...");
+        imageExportBox.getChildren().addAll(imageExportLabel, imageExportPathField, browseImageExportButton);
 
         // Output filename (will be auto-updated from text field)
         HBox fileBox = new HBox(10);
@@ -158,10 +196,16 @@ public class MainView {
         Label gifLabel = new Label(".gif");
         fileBox.getChildren().addAll(fileLabel, fileNameField, gifLabel);
 
-        // Go button
-        goButton = new Button("GO");
-        goButton.setPrefWidth(150);
-        goButton.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
+        // Go buttons (Text and Image)
+        HBox goButtonsBox = new HBox(10);
+        goButtonsBox.setAlignment(Pos.CENTER_LEFT);
+        goTextButton = new Button("GO Texte");
+        goTextButton.setPrefWidth(150);
+        goTextButton.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-background-color: #4CAF50; -fx-text-fill: white;");
+        goImageButton = new Button("GO Image");
+        goImageButton.setPrefWidth(150);
+        goImageButton.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-background-color: #2196F3; -fx-text-fill: white;");
+        goButtonsBox.getChildren().addAll(goTextButton, goImageButton);
 
         // Progress bar and status
         progressBar = new ProgressBar(0);
@@ -176,18 +220,20 @@ public class MainView {
                 textBox,
                 fontBox,
                 colorBox,
+                imageBox,
                 previewLabel,
                 new Separator(),
                 paramsGrid,
                 new Separator(),
                 pathBox,
+                imageExportBox,
                 fileBox,
-                goButton,
+                goButtonsBox,
                 progressBar,
                 statusLabel
         );
 
-        Scene scene = new Scene(root, 700, 750);
+        Scene scene = new Scene(root, 700, 850);
         stage.setScene(scene);
     }
 
@@ -253,8 +299,16 @@ public class MainView {
         return browseButton;
     }
 
-    public Button getGoButton() {
-        return goButton;
+    public Button getGoTextButton() {
+        return goTextButton;
+    }
+
+    public Button getGoImageButton() {
+        return goImageButton;
+    }
+
+    public Spinner<Integer> getCyclesSpinner() {
+        return cyclesSpinner;
     }
 
     public ProgressBar getProgressBar() {
@@ -275,5 +329,21 @@ public class MainView {
 
     public ListView<String> getRecentColorsList() {
         return recentColorsList;
+    }
+
+    public Button getSelectImageButton() {
+        return selectImageButton;
+    }
+
+    public TextField getImagePathField() {
+        return imagePathField;
+    }
+
+    public TextField getImageExportPathField() {
+        return imageExportPathField;
+    }
+
+    public Button getBrowseImageExportButton() {
+        return browseImageExportButton;
     }
 }

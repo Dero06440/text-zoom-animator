@@ -1,11 +1,14 @@
 package com.zoom.controller;
 
 import com.zoom.model.AnimationSettings;
+import com.zoom.model.ImageAnimationSettings;
 import com.zoom.util.GifExporter;
+import com.zoom.util.ImageGifExporter;
 import com.zoom.view.MainView;
 import javafx.application.Platform;
 import javafx.concurrent.Task;
 import javafx.stage.DirectoryChooser;
+import javafx.stage.FileChooser;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -19,10 +22,15 @@ import java.util.prefs.Preferences;
 public class MainController {
     private MainView view;
     private AnimationSettings settings;
+    private ImageAnimationSettings imageSettings;
+    private File selectedImageFile;
     private Preferences prefs;
     private static final String PREF_OUTPUT_PATH = "outputPath";
+    private static final String PREF_IMAGE_EXPORT_PATH = "imageExportPath";
+    private static final String PREF_LAST_IMAGE_SOURCE_DIR = "lastImageSourceDir";
     private static final String PREF_FONT_NAME = "fontName";
     private static final String PREF_FRAME_COUNT = "frameCount";
+    private static final String PREF_CYCLES = "cycles";
     private static final String PREF_START_SCALE = "startScale";
     private static final String PREF_MIDDLE_SCALE = "middleScale";
     private static final String PREF_END_SCALE = "endScale";
@@ -33,6 +41,7 @@ public class MainController {
     public MainController(MainView view) {
         this.view = view;
         this.settings = new AnimationSettings();
+        this.imageSettings = new ImageAnimationSettings();
         this.prefs = Preferences.userNodeForPackage(MainController.class);
 
         // Load saved preferences
@@ -47,6 +56,10 @@ public class MainController {
         view.getOutputPathField().setText(savedPath);
         settings.setOutputPath(savedPath);
 
+        // Load saved image export path
+        String savedImageExportPath = prefs.get(PREF_IMAGE_EXPORT_PATH, "C:\\temp");
+        view.getImageExportPathField().setText(savedImageExportPath);
+
         // Load saved font name
         String savedFont = prefs.get(PREF_FONT_NAME, null);
         if (savedFont != null && view.getFontComboBox().getItems().contains(savedFont)) {
@@ -56,6 +69,10 @@ public class MainController {
         // Load saved frame count
         int savedFrameCount = prefs.getInt(PREF_FRAME_COUNT, 18);
         view.getFramesSpinner().getValueFactory().setValue(savedFrameCount);
+
+        // Load saved cycles
+        int savedCycles = prefs.getInt(PREF_CYCLES, 1);
+        view.getCyclesSpinner().getValueFactory().setValue(savedCycles);
 
         // Load saved scales
         double savedStartScale = prefs.getDouble(PREF_START_SCALE, 100.0);
@@ -84,6 +101,9 @@ public class MainController {
         // Save current output path
         prefs.put(PREF_OUTPUT_PATH, view.getOutputPathField().getText());
 
+        // Save image export path
+        prefs.put(PREF_IMAGE_EXPORT_PATH, view.getImageExportPathField().getText());
+
         // Save current font
         String currentFont = view.getFontComboBox().getValue();
         if (currentFont != null) {
@@ -92,6 +112,9 @@ public class MainController {
 
         // Save frame count
         prefs.putInt(PREF_FRAME_COUNT, view.getFramesSpinner().getValue());
+
+        // Save cycles
+        prefs.putInt(PREF_CYCLES, view.getCyclesSpinner().getValue());
 
         // Save scales
         prefs.putDouble(PREF_START_SCALE, view.getStartScaleSpinner().getValue());
@@ -153,7 +176,8 @@ public class MainController {
     }
 
     private void initializeEventHandlers() {
-        view.getGoButton().setOnAction(event -> startAnimation());
+        view.getGoTextButton().setOnAction(event -> startTextAnimation());
+        view.getGoImageButton().setOnAction(event -> startImageAnimation());
 
         // Update filename field in real-time as user types
         view.getTextField().textProperty().addListener((observable, oldValue, newValue) -> {
@@ -208,6 +232,11 @@ public class MainController {
             savePreferences();
         });
 
+        // Save preferences when cycles change
+        view.getCyclesSpinner().valueProperty().addListener((observable, oldValue, newValue) -> {
+            savePreferences();
+        });
+
         // Save preferences when scales change
         view.getStartScaleSpinner().valueProperty().addListener((observable, oldValue, newValue) -> {
             savePreferences();
@@ -236,9 +265,64 @@ public class MainController {
                 view.getColorField().setText(selectedColor);
             }
         });
+
+        // Handle image selection button
+        view.getSelectImageButton().setOnAction(event -> {
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle("Sélectionner une image");
+            fileChooser.getExtensionFilters().addAll(
+                new FileChooser.ExtensionFilter("Images", "*.png", "*.jpg", "*.jpeg", "*.gif", "*.bmp"),
+                new FileChooser.ExtensionFilter("Tous les fichiers", "*.*")
+            );
+
+            // Set initial directory from last used location
+            String lastImageDir = prefs.get(PREF_LAST_IMAGE_SOURCE_DIR, null);
+            if (lastImageDir != null) {
+                File lastDir = new File(lastImageDir);
+                if (lastDir.exists() && lastDir.isDirectory()) {
+                    fileChooser.setInitialDirectory(lastDir);
+                }
+            }
+
+            File selected = fileChooser.showOpenDialog(view.getStage());
+            if (selected != null) {
+                selectedImageFile = selected;
+                view.getImagePathField().setText(selected.getAbsolutePath());
+
+                // Update filename field with image name (without extension)
+                String fileName = selected.getName();
+                String fileNameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.'));
+                view.getFileNameField().setText(fileNameWithoutExt);
+
+                // Save the directory for next time
+                prefs.put(PREF_LAST_IMAGE_SOURCE_DIR, selected.getParent());
+            }
+        });
+
+        // Handle image export directory browser
+        view.getBrowseImageExportButton().setOnAction(event -> {
+            DirectoryChooser directoryChooser = new DirectoryChooser();
+            directoryChooser.setTitle("Sélectionner le dossier d'export image");
+
+            File currentPath = new File(view.getImageExportPathField().getText());
+            if (currentPath.exists() && currentPath.isDirectory()) {
+                directoryChooser.setInitialDirectory(currentPath);
+            }
+
+            File selectedDirectory = directoryChooser.showDialog(view.getStage());
+            if (selectedDirectory != null) {
+                view.getImageExportPathField().setText(selectedDirectory.getAbsolutePath());
+                savePreferences();
+            }
+        });
+
+        // Save preferences when image export path changes
+        view.getImageExportPathField().textProperty().addListener((observable, oldValue, newValue) -> {
+            savePreferences();
+        });
     }
 
-    private void startAnimation() {
+    private void startTextAnimation() {
         // Read settings from view
         settings.setText(view.getTextField().getText());
         settings.setFontName(view.getFontComboBox().getValue());
@@ -272,12 +356,23 @@ public class MainController {
             return;
         }
 
+        // Check if output file already exists
+        String outputPath = settings.getOutputPath() + File.separator + settings.getOutputFileName() + ".gif";
+        File outputFile = new File(outputPath);
+        if (outputFile.exists()) {
+            boolean confirmed = showConfirmOverwrite(outputFile.getName());
+            if (!confirmed) {
+                return; // User cancelled
+            }
+        }
+
         // Add to recent lists
         addToRecentFonts(settings.getFontName());
         addToRecentColors(settings.getTextColor());
 
-        // Disable button during processing
-        view.getGoButton().setDisable(true);
+        // Disable buttons during processing
+        view.getGoTextButton().setDisable(true);
+        view.getGoImageButton().setDisable(true);
         view.getProgressBar().setVisible(true);
         view.getProgressBar().setProgress(0);
 
@@ -285,13 +380,14 @@ public class MainController {
         Task<Void> task = new Task<Void>() {
             @Override
             protected Void call() throws Exception {
-                generateAnimation();
+                generateTextAnimation();
                 return null;
             }
 
             @Override
             protected void succeeded() {
-                view.getGoButton().setDisable(false);
+                view.getGoTextButton().setDisable(false);
+                view.getGoImageButton().setDisable(false);
                 view.getProgressBar().setVisible(false);
                 String outputPath = settings.getOutputPath() + File.separator + settings.getOutputFileName() + ".gif";
                 showStatus("Animation créée avec succès: " + outputPath, false);
@@ -299,7 +395,8 @@ public class MainController {
 
             @Override
             protected void failed() {
-                view.getGoButton().setDisable(false);
+                view.getGoTextButton().setDisable(false);
+                view.getGoImageButton().setDisable(false);
                 view.getProgressBar().setVisible(false);
                 Throwable error = getException();
                 showStatus("Erreur: " + (error != null ? error.getMessage() : "Unknown error"), true);
@@ -310,54 +407,129 @@ public class MainController {
         new Thread(task).start();
     }
 
-    private void generateAnimation() throws Exception {
-        int totalFrames = settings.getNumberOfFrames();
+    private void startImageAnimation() {
+        // Read settings from view
+        imageSettings.setSourceImageFile(selectedImageFile);
+        imageSettings.setNumberOfFrames(view.getFramesSpinner().getValue());
+        imageSettings.setStartScale(view.getStartScaleSpinner().getValue());
+        imageSettings.setMiddleScale(view.getMiddleScaleSpinner().getValue());
+        imageSettings.setEndScale(view.getEndScaleSpinner().getValue());
+        imageSettings.setOutputDirectory(view.getImageExportPathField().getText());
+
+        // Use filename from the field (same field as text mode)
+        String fileName = view.getFileNameField().getText();
+        if (fileName == null || fileName.trim().isEmpty()) {
+            // Fallback to source image name if field is empty
+            String sourceFileName = selectedImageFile.getName();
+            fileName = sourceFileName.substring(0, sourceFileName.lastIndexOf('.'));
+        }
+        imageSettings.setOutputFileName(fileName + ".gif");
+
+        // Validate inputs
+        if (!selectedImageFile.exists()) {
+            showStatus("Erreur: Le fichier image n'existe pas", true);
+            return;
+        }
+
+        // Check if output file already exists
+        String outputPath = imageSettings.getOutputDirectory() + File.separator + imageSettings.getOutputFileName();
+        File outputFile = new File(outputPath);
+        if (outputFile.exists()) {
+            boolean confirmed = showConfirmOverwrite(outputFile.getName());
+            if (!confirmed) {
+                return; // User cancelled
+            }
+        }
+
+        // Disable buttons during processing
+        view.getGoTextButton().setDisable(true);
+        view.getGoImageButton().setDisable(true);
+        view.getProgressBar().setVisible(true);
+        view.getProgressBar().setProgress(0);
+
+        // Run animation generation in background thread
+        Task<Void> task = new Task<Void>() {
+            @Override
+            protected Void call() throws Exception {
+                generateImageAnimation();
+                return null;
+            }
+
+            @Override
+            protected void succeeded() {
+                view.getGoTextButton().setDisable(false);
+                view.getGoImageButton().setDisable(false);
+                view.getProgressBar().setVisible(false);
+                String outputPath = imageSettings.getOutputDirectory() + File.separator + imageSettings.getOutputFileName();
+                showStatus("Animation image créée avec succès: " + outputPath, false);
+            }
+
+            @Override
+            protected void failed() {
+                view.getGoTextButton().setDisable(false);
+                view.getGoImageButton().setDisable(false);
+                view.getProgressBar().setVisible(false);
+                Throwable error = getException();
+                showStatus("Erreur: " + (error != null ? error.getMessage() : "Unknown error"), true);
+                error.printStackTrace();
+            }
+        };
+
+        new Thread(task).start();
+    }
+
+    private void generateTextAnimation() throws Exception {
+        int framesPerCycle = settings.getNumberOfFrames();
+        int cycles = view.getCyclesSpinner().getValue();
+        int totalFrames = framesPerCycle * cycles;
         List<BufferedImage> frames = new ArrayList<>();
 
         // Much larger size for highest quality
         int frameWidth = 3840;
         int frameHeight = 2160;
 
-        showStatus("Génération des frames (" + totalFrames + " images)...", false);
+        showStatus("Génération des frames (" + totalFrames + " images, " + cycles + " cycle(s))...", StatusColor.PROCESSING);
 
         // Calculate scale for each frame
-        int halfFrames = totalFrames / 2;
+        int halfFrames = framesPerCycle / 2;
 
-        for (int i = 0; i < totalFrames; i++) {
-            double scale;
+        for (int cycle = 0; cycle < cycles; cycle++) {
+            for (int i = 0; i < framesPerCycle; i++) {
+                double scale;
 
-            if (i < halfFrames) {
-                // Zoom in phase (start to middle)
-                double progress = (double) i / halfFrames;
-                scale = settings.getStartScale() +
-                        (settings.getMiddleScale() - settings.getStartScale()) * progress;
-            } else {
-                // Zoom out phase (middle to end)
-                double progress = (double) (i - halfFrames) / (totalFrames - halfFrames);
-                scale = settings.getMiddleScale() +
-                        (settings.getEndScale() - settings.getMiddleScale()) * progress;
+                if (i < halfFrames) {
+                    // Zoom in phase (start to middle)
+                    double progress = (double) i / halfFrames;
+                    scale = settings.getStartScale() +
+                            (settings.getMiddleScale() - settings.getStartScale()) * progress;
+                } else {
+                    // Zoom out phase (middle to end)
+                    double progress = (double) (i - halfFrames) / (framesPerCycle - halfFrames);
+                    scale = settings.getMiddleScale() +
+                            (settings.getEndScale() - settings.getMiddleScale()) * progress;
+                }
+
+                BufferedImage frame = GifExporter.createTextFrame(
+                        settings.getText(),
+                        settings.getFontName(),
+                        scale,
+                        frameWidth,
+                        frameHeight,
+                        settings.getTextColor()
+                );
+                frames.add(frame);
+
+                // Update progress and status
+                final int frameNum = (cycle * framesPerCycle) + i + 1;
+                final double progress = (double) frameNum / totalFrames;
+                Platform.runLater(() -> {
+                    view.getProgressBar().setProgress(progress);
+                    showStatus("Génération des frames: " + frameNum + "/" + totalFrames, StatusColor.PROCESSING);
+                });
             }
-
-            BufferedImage frame = GifExporter.createTextFrame(
-                    settings.getText(),
-                    settings.getFontName(),
-                    scale,
-                    frameWidth,
-                    frameHeight,
-                    settings.getTextColor()
-            );
-            frames.add(frame);
-
-            // Update progress and status
-            final int frameNum = i + 1;
-            final double progress = (double) frameNum / totalFrames;
-            Platform.runLater(() -> {
-                view.getProgressBar().setProgress(progress);
-                showStatus("Génération des frames: " + frameNum + "/" + totalFrames, false);
-            });
         }
 
-        showStatus("Calcul du crop automatique...", false);
+        showStatus("Calcul du crop automatique...", StatusColor.PROCESSING);
 
         // Export to GIF
         String outputPath = settings.getOutputPath() + File.separator + settings.getOutputFileName() + ".gif";
@@ -368,7 +540,7 @@ public class MainController {
             outputDir.mkdirs();
         }
 
-        showStatus("Encodage du GIF...", false);
+        showStatus("Encodage du GIF...", StatusColor.PROCESSING);
 
         // Calculate delay: slower animation (3 seconds total duration)
         int delayMs = Math.max(50, 3000 / totalFrames);
@@ -376,15 +548,117 @@ public class MainController {
         GifExporter.exportToGif(frames, outputPath, delayMs);
     }
 
+    private void generateImageAnimation() throws Exception {
+        int framesPerCycle = imageSettings.getNumberOfFrames();
+        int cycles = view.getCyclesSpinner().getValue();
+        int totalFrames = framesPerCycle * cycles;
+        List<BufferedImage> frames = new ArrayList<>();
+
+        // 4K resolution for highest quality
+        int frameWidth = 3840;
+        int frameHeight = 2160;
+
+        showStatus("Chargement de l'image source...", StatusColor.PROCESSING);
+
+        // Load source image
+        BufferedImage sourceImage = ImageGifExporter.loadImage(imageSettings.getSourceImageFile());
+
+        showStatus("Génération des frames (" + totalFrames + " images, " + cycles + " cycle(s))...", StatusColor.PROCESSING);
+
+        // Calculate scale for each frame (same logic as text animation)
+        int halfFrames = framesPerCycle / 2;
+
+        for (int cycle = 0; cycle < cycles; cycle++) {
+            for (int i = 0; i < framesPerCycle; i++) {
+                double scale;
+
+                if (i < halfFrames) {
+                    // First phase (start to middle)
+                    double progress = (double) i / halfFrames;
+                    scale = imageSettings.getStartScale() +
+                            (imageSettings.getMiddleScale() - imageSettings.getStartScale()) * progress;
+                } else {
+                    // Second phase (middle to end)
+                    double progress = (double) (i - halfFrames) / (framesPerCycle - halfFrames);
+                    scale = imageSettings.getMiddleScale() +
+                            (imageSettings.getEndScale() - imageSettings.getMiddleScale()) * progress;
+                }
+
+                BufferedImage frame = ImageGifExporter.createImageFrame(
+                        sourceImage,
+                        scale,
+                        frameWidth,
+                        frameHeight
+                );
+                frames.add(frame);
+
+                // Update progress
+                final int frameNum = (cycle * framesPerCycle) + i + 1;
+                final double progress = (double) frameNum / totalFrames;
+                Platform.runLater(() -> {
+                    view.getProgressBar().setProgress(progress);
+                    showStatus("Génération des frames: " + frameNum + "/" + totalFrames, StatusColor.PROCESSING);
+                });
+            }
+        }
+
+        showStatus("Calcul du crop automatique...", StatusColor.PROCESSING);
+
+        // Export to GIF
+        String outputPath = imageSettings.getOutputDirectory() + File.separator + imageSettings.getOutputFileName();
+
+        // Create output directory if it doesn't exist
+        File outputDir = new File(imageSettings.getOutputDirectory());
+        if (!outputDir.exists()) {
+            outputDir.mkdirs();
+        }
+
+        showStatus("Encodage du GIF...", StatusColor.PROCESSING);
+
+        // Calculate delay: 3 seconds total duration
+        int delayMs = Math.max(50, 3000 / totalFrames);
+
+        ImageGifExporter.exportToGif(frames, outputPath, delayMs);
+    }
+
     private void showStatus(String message, boolean isError) {
+        showStatus(message, isError ? StatusColor.ERROR : StatusColor.SUCCESS);
+    }
+
+    private void showStatus(String message, StatusColor color) {
         Platform.runLater(() -> {
             view.getStatusLabel().setText(message);
-            if (isError) {
-                view.getStatusLabel().setStyle("-fx-text-fill: red;");
-            } else {
-                view.getStatusLabel().setStyle("-fx-text-fill: green;");
+            switch (color) {
+                case PROCESSING:
+                    view.getStatusLabel().setStyle("-fx-text-fill: blue;");
+                    break;
+                case SUCCESS:
+                    view.getStatusLabel().setStyle("-fx-text-fill: green;");
+                    break;
+                case ERROR:
+                    view.getStatusLabel().setStyle("-fx-text-fill: red;");
+                    break;
             }
         });
+    }
+
+    private enum StatusColor {
+        PROCESSING, SUCCESS, ERROR
+    }
+
+    private boolean showConfirmOverwrite(String fileName) {
+        javafx.scene.control.Alert alert = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Confirmation");
+        alert.setHeaderText("Le fichier existe déjà");
+        alert.setContentText("Le fichier '" + fileName + "' existe déjà.\nVoulez-vous l'écraser ?");
+
+        javafx.scene.control.ButtonType buttonTypeYes = new javafx.scene.control.ButtonType("Oui");
+        javafx.scene.control.ButtonType buttonTypeNo = new javafx.scene.control.ButtonType("Non", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+
+        alert.getButtonTypes().setAll(buttonTypeYes, buttonTypeNo);
+
+        java.util.Optional<javafx.scene.control.ButtonType> result = alert.showAndWait();
+        return result.isPresent() && result.get() == buttonTypeYes;
     }
 
     private String sanitizeFileName(String text) {
