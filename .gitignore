@@ -44,3 +44,4 @@ out/
 local.properties
 .claude/settings.local.json
 CLAUDE.md
+/.claude
